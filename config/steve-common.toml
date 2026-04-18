@@ -1,0 +1,86 @@
+[ai]
+    # AI provider to use: 'groq' (FASTEST, FREE), 'openai', or 'gemini'
+    provider = "qwen"
+
+[openai]
+    # Your OpenAI API key
+    # Get your API key from: https://platform.openai.com/api-keys
+    apiKey = ""
+    
+    # OpenAI model to use
+    model = "gpt-3.5-turbo"
+    
+    # Maximum tokens per API request
+    maxTokens = 1000
+    
+    # Temperature (0.0-2.0, lower is more deterministic)
+    temperature = 0.7
+
+[gemini]
+    # Your Gemini API key
+    # Get your API key from: https://aistudio.google.com/apikey
+    apiKey = ""
+    
+    # Gemini model to use
+    model = "gemini-2.5-flash"
+    
+    # Maximum tokens per API request
+    maxTokens = 1000
+    
+    # Temperature (0.0-2.0, lower is more deterministic)
+    temperature = 0.7
+
+[groq]
+    # Your Groq API key
+    # Get your API key from: https://console.groq.com/
+    apiKey = ""
+    
+    # Groq model to use
+    model = "llama-3.1-8b-instant"
+    
+    # Maximum tokens per API request
+    maxTokens = 100
+    
+    # Temperature (0.0-2.0, lower is more deterministic)
+    temperature = 0.7
+
+[qwen]
+    # Your Qwen API key
+    # Get your API key from: https://bailian.console.aliyun.com/
+    apiKey = ""
+    
+    # Qwen model to use
+    model = "qwen3.6-flash"
+    
+    # Maximum tokens per API request
+    maxTokens = 1000
+    
+    # Temperature (0.0-2.0, lower is more deterministic)
+    temperature = 0.7
+
+[behavior]
+    # Ticks between action checks (20 ticks = 1 second)
+    actionTickDelay = 20
+    
+    # Allow Steves to respond in chat
+    enableChatResponses = true
+    
+    # Maximum number of Steves that can be active simultaneously
+    maxActiveSteves = 5
+
+[network]
+    # Custom API Base URL for Gemini (leave empty to use default)
+    # Useful for proxy servers in regions where Google API is blocked
+    apiBaseUrl = ""
+    
+    # Proxy host for HTTP connections (leave empty to use system proxy or no proxy)
+    proxyHost = "127.0.0.1"
+    
+    # Proxy port for HTTP connections (0 to disable)
+    proxyPort = 8001
+
+[building]
+    # Enable multiple building styles for variety
+    enableMultipleStyles = true
+    # Comma-separated list of enabled building styles
+    styles = "oak_classic,spruce_cabin,birch_cottage,stone_fortress,sandstone_desert,dark_oak_manor,brick_house,jungle_hut"

@@ -1,0 +1,83 @@
+package com.steve.ai.llm;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.steve.ai.SteveMod;
+import com.steve.ai.config.SteveConfig;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+/**
+ * Client for Qwen API (Alibaba DashScope)
+ * OpenAI-compatible API endpoint
+ */
+public class QwenClient {
+    private static final String QWEN_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    
+    private final HttpClient client;
+    private final String apiKey;
+
+    public QwenClient() {
+        this.apiKey = SteveConfig.QWEN_API_KEY.get();
+        this.client = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+    }
+
+    public String sendRequest(String systemPrompt, String userPrompt) {
+        if (apiKey == null || apiKey.isEmpty()) {
+            SteveMod.LOGGER.error("Qwen API key is not set in the config.");
+            return null;
+        }
+
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("model", SteveConfig.QWEN_MODEL.get());
+        
+        JsonArray messages = new JsonArray();
+        
+        JsonObject systemMessage = new JsonObject();
+        systemMessage.addProperty("role", "system");
+        systemMessage.addProperty("content", systemPrompt);
+        messages.add(systemMessage);
+
+        JsonObject userMessage = new JsonObject();
+        userMessage.addProperty("role", "user");
+        userMessage.addProperty("content", userPrompt);
+        messages.add(userMessage);
+
+        requestBody.add("messages", messages);
+        requestBody.addProperty("max_tokens", SteveConfig.QWEN_MAX_TOKENS.get());
+        requestBody.addProperty("temperature", SteveConfig.QWEN_TEMPERATURE.get());
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(QWEN_API_URL))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer " + apiKey)
+            .timeout(Duration.ofSeconds(30))
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+            .build();
+
+        try {
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
+                return jsonResponse.getAsJsonArray("choices").get(0).getAsJsonObject()
+                    .getAsJsonObject("message").get("content").getAsString();
+            } else {
+                SteveMod.LOGGER.error("Qwen API request failed: {} ", response.statusCode());
+                SteveMod.LOGGER.error("Response body: {}", response.body());
+                return null;
+            }
+        } catch (Exception e) {
+            SteveMod.LOGGER.error("Error sending request to Qwen API", e);
+            return null;
+        }
+    }
+}
