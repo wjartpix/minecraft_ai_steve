@@ -53,8 +53,8 @@
 | 维度 | 描述 |
 |------|------|
 | **痛点** | 清理怪物区域需要反复手动操作，效率低下 |
-| **解决方案** | AI 自动识别敌对生物类型，智能选择目标并逐个清除 |
-| **技术实现** | `CombatAction` (290行) 支持 6 个生物分组、多目标队列、32格搜索范围 |
+| **解决方案** | AI 自动识别敌对生物类型，以保护玩家为核心，智能选择目标并逐个清除 |
+| **技术实现** | `CombatAction` (350+行) 支持 7 个生物分组、多目标队列、200×200格搜索范围（以玩家为中心） |
 
 #### 1.2.5 探索导航
 
@@ -83,22 +83,25 @@ Steve AI 功能树
 │
 ├── 游戏操作域
 │   ├── 建筑系统
-│   │   ├── 8种建筑风格 (现代/中世纪/东方/未来主义/工业/自然/极简/奇幻)
-│   │   ├── 6种建筑类型 (房屋/塔楼/桥梁/围墙/农场/装饰)
+│   │   ├── 16种建筑风格 (经典橡木/云杉/白桦/石砖/沙岩/深色橡木/砖瓦/丛林/金合欢/樱花/竹林/红树林/深板岩/下界砖/诡异/绯红)
+│   │   ├── 9种建筑类型 (房屋/老房子/发电厂/城堡/塔楼/谷仓/现代/墙壁/平台/立方体)
 │   │   ├── 协作构建 (多Steve并行)
 │   │   └── 自动选址 (地形分析)
 │   ├── 挖矿系统
-│   │   ├── 智能深度挖矿 (螺旋/分支/鱼骨模式)
-│   │   ├── 单向隧道 (安全退避)
+│   │   ├── 智能深度挖矿 (根据矿石类型自动前往合适深度)
+│   │   ├── 单向隧道 (根据玩家视线方向)
+│   │   ├── 自动火把照明 (每5秒检查光线)
 │   │   └── 8种矿石目标 (钻石/红石/青金石/金/铁/铜/煤/绿宝石)
 │   ├── 采集系统
-│   │   ├── 5种资源分组 (木材/矿石/作物/动物/杂物)
+│   │   ├── 5种资源分组 (木材/花朵/蘑菇/矿石/石头)
 │   │   ├── 8种木材类型
-│   │   └── 32格搜索半径
+│   │   ├── 玩家中心搜索 (200×200格范围)
+│   │   └── 简化指令支持 (get wood/flowers/mushrooms)
 │   ├── 战斗系统
-│   │   ├── 6个生物分组 (敌对/中立/被动/BOSS/水生/飞行)
+│   │   ├── 7个生物分组 (亡灵/飞行/下界/劫掠/首领/远程/史莱姆)
+│   │   ├── 玩家中心搜索 (200×200格范围，保护玩家)
 │   │   ├── 多目标队列管理
-│   │   └── 32格范围扫描
+│   │   └── 动态补充机制 (每2秒重新扫描)
 │   ├── 移动导航
 │   │   ├── 路径寻找 (A*算法)
 │   │   └── 跟随玩家 (动态距离保持)
@@ -386,10 +389,10 @@ public abstract class BaseAction {
 
 | 动作类 | 代码行数 | 核心功能 | 源码路径 |
 |--------|----------|----------|----------|
-| `BuildStructureAction` | 659行 | 8种风格建筑生成、协作构建、自动选址 | `action/actions/BuildStructureAction.java` |
-| `MineBlockAction` | 387行 | 智能挖矿、隧道模式、矿石识别 | `action/actions/MineBlockAction.java` |
-| `CombatAction` | 290行 | 生物分组、目标队列、战斗策略 | `action/actions/CombatAction.java` |
-| `GatherResourceAction` | 357行 | 资源采集、搜索算法、物品收集 | `action/actions/GatherResourceAction.java` |
+| `BuildStructureAction` | 667行 | 16种风格建筑生成、协作构建、自动选址、NBT模板支持 | `action/actions/BuildStructureAction.java` |
+| `MineBlockAction` | 388行 | 智能深度挖矿、单向隧道、火把照明、矿石识别 | `action/actions/MineBlockAction.java` |
+| `CombatAction` | 350+行 | 7个生物分组、玩家中心搜索200×200、多目标队列 | `action/actions/CombatAction.java` |
+| `GatherResourceAction` | 400+行 | 资源采集、玩家中心200×200搜索、简化指令 | `action/actions/GatherResourceAction.java` |
 | `PathfindAction` | ~150行 | A*路径寻找、障碍物规避 | `action/actions/PathfindAction.java` |
 | `FollowPlayerAction` | ~120行 | 玩家跟随、距离保持 | `action/actions/FollowPlayerAction.java` |
 | `PlaceBlockAction` | ~100行 | 单方块放置、方向控制 | `action/actions/PlaceBlockAction.java` |
@@ -690,7 +693,7 @@ public class SteveMemory {
     timeoutMs = 30000
 
 [behavior]
-    maxSteveCount = 5
+    maxActiveSteves = 10
     autoFollowPlayer = true
     followDistance = 3.0
     workRadius = 32
@@ -906,9 +909,9 @@ public class SteveConfig {
 | **事件拦截器** | `execution/EventPublishingInterceptor.java` | 事件发布 |
 | **动作基类** | `action/Task.java` | 任务定义 |
 | | `action/ActionResult.java` | 结果封装 |
-| **建筑动作** | `action/actions/BuildStructureAction.java` | 建筑生成(659行) |
-| **挖矿动作** | `action/actions/MineBlockAction.java` | 智能挖矿(387行) |
-| **战斗动作** | `action/actions/CombatAction.java` | 战斗逻辑(290行) |
+| **建筑动作** | `action/actions/BuildStructureAction.java` | 建筑生成(667行，16种风格) |
+| **挖矿动作** | `action/actions/MineBlockAction.java` | 智能挖矿(388行，深度挖矿) |
+| **战斗动作** | `action/actions/CombatAction.java` | 战斗逻辑(350+行，玩家中心200×200) |
 | **采集动作** | `action/actions/GatherResourceAction.java` | 资源采集(357行) |
 | **路径动作** | `action/actions/PathfindAction.java` | 路径寻找 |
 | **跟随动作** | `action/actions/FollowPlayerAction.java` | 玩家跟随 |

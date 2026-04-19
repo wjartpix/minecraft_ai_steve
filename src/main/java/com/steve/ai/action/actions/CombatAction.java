@@ -2,11 +2,15 @@ package com.steve.ai.action.actions;
 
 import com.steve.ai.action.ActionResult;
 import com.steve.ai.action.Task;
+import com.steve.ai.config.SteveConfig;
 import com.steve.ai.entity.SteveEntity;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.Slime;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
@@ -22,8 +26,11 @@ public class CombatAction extends BaseAction {
     private int ticksRunning;
     private int ticksStuck;
     private double lastX, lastZ;
-    private static final int MAX_TICKS = 2400; // 2 minutes timeout for multi-target combat
+    private static final int MAX_TICKS = 7200; // 6 minutes timeout
     private static final double ATTACK_RANGE = 3.5;
+    private static final double GROUND_SEARCH_RANGE = 5.0; // Search for ground within 5 blocks vertically
+    private Player protectedPlayer; // The player we're protecting (center of search)
+    private double playerSearchRadius; // Configurable search radius
 
     // Creature aliases: alias -> resolved type or group
     private static final Map<String, String> CREATURE_ALIASES = new HashMap<>() {{
@@ -62,6 +69,13 @@ public class CombatAction extends BaseAction {
         put("endermen", "enderman");
         put("phantoms", "phantom");
         put("witches", "witch");
+        
+        // Slime aliases
+        put("slimes", "slime");
+        put("cube", "slime");
+        put("cubes", "slime");
+        put("magma", "magma_cube");
+        put("magma_cubes", "magma_cube");
     }};
 
     // Creature groups: group name -> list of entity type IDs
@@ -86,6 +100,9 @@ public class CombatAction extends BaseAction {
         put("raid", Arrays.asList(
             "pillager", "vindicator", "evoker", "ravager", "vex"
         ));
+        put("slime", Arrays.asList(
+            "slime", "magma_cube"
+        ));
     }};
 
     public CombatAction(SteveEntity steve, Task task) {
@@ -99,20 +116,115 @@ public class CombatAction extends BaseAction {
         ticksStuck = 0;
         targetQueue.clear();
         target = null;
+        protectedPlayer = null;
 
         // Make sure we're not flying (in case we were building)
         steve.setFlying(false);
 
         steve.setInvulnerableBuilding(true);
 
+        // Load configurable search radius
+        playerSearchRadius = SteveConfig.COMBAT_SEARCH_RADIUS.get();
+
+        // If Steve is in the air (e.g., was building), teleport to ground first
+        ensureSteveOnGround();
+
+        // Find the nearest player to protect (center of monster search)
+        findProtectedPlayer();
+
         findAllTargets();
 
         if (targetQueue.isEmpty()) {
-            com.steve.ai.SteveMod.LOGGER.warn("Steve '{}' no targets nearby", steve.getSteveName());
+            if (protectedPlayer != null) {
+                com.steve.ai.SteveMod.LOGGER.warn("Steve '{}' no targets near player '{}' in 200x200 area",
+                    steve.getSteveName(), protectedPlayer.getName().getString());
+            } else {
+                com.steve.ai.SteveMod.LOGGER.warn("Steve '{}' no player found to protect, no targets nearby",
+                    steve.getSteveName());
+            }
         } else {
-            com.steve.ai.SteveMod.LOGGER.info("Steve '{}' found {} targets of type '{}'",
-                steve.getSteveName(), targetQueue.size(), targetType);
+            String playerName = protectedPlayer != null ? protectedPlayer.getName().getString() : "unknown";
+            com.steve.ai.SteveMod.LOGGER.info("Steve '{}' protecting player '{}', found {} targets of type '{}' in 200x200 area",
+                steve.getSteveName(), playerName, targetQueue.size(), targetType);
         }
+    }
+
+    /**
+     * Ensure Steve is on solid ground before starting combat
+     * If Steve is in the air, find the ground below and teleport there
+     */
+    private void ensureSteveOnGround() {
+        BlockPos stevePos = steve.blockPosition();
+        
+        // Check if Steve is on solid ground
+        BlockPos belowPos = stevePos.below();
+        boolean onSolidGround = steve.level().getBlockState(belowPos).isSolid();
+        
+        if (!onSolidGround) {
+            // Search downward for solid ground
+            for (int dy = 0; dy >= -GROUND_SEARCH_RANGE; dy--) {
+                BlockPos checkPos = stevePos.offset(0, dy, 0);
+                BlockPos groundPos = checkPos.below();
+                
+                if (steve.level().getBlockState(groundPos).isSolid() && 
+                    steve.level().getBlockState(checkPos).isAir()) {
+                    // Found solid ground with air above, teleport there
+                    steve.teleportTo(checkPos.getX() + 0.5, checkPos.getY(), checkPos.getZ() + 0.5);
+                    com.steve.ai.SteveMod.LOGGER.info("Steve '{}' teleported to ground at {} for combat",
+                        steve.getSteveName(), checkPos);
+                    return;
+                }
+            }
+            
+            // If no ground found below, search around horizontally
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    if (dx == 0 && dz == 0) continue;
+                    
+                    BlockPos checkPos = stevePos.offset(dx, 0, dz);
+                    BlockPos groundPos = checkPos.below();
+                    
+                    if (steve.level().getBlockState(groundPos).isSolid() && 
+                        steve.level().getBlockState(checkPos).isAir()) {
+                        steve.teleportTo(checkPos.getX() + 0.5, checkPos.getY(), checkPos.getZ() + 0.5);
+                        com.steve.ai.SteveMod.LOGGER.info("Steve '{}' teleported to nearby ground at {} for combat",
+                            steve.getSteveName(), checkPos);
+                        return;
+                    }
+                }
+            }
+            
+            com.steve.ai.SteveMod.LOGGER.warn("Steve '{}' could not find solid ground, may be stuck in air",
+                steve.getSteveName());
+        }
+    }
+
+    /**
+     * Find the nearest player to protect (center of monster search area)
+     */
+    private void findProtectedPlayer() {
+        java.util.List<? extends Player> players = steve.level().players();
+        if (players.isEmpty()) {
+            protectedPlayer = null;
+            return;
+        }
+
+        // Find nearest player to Steve
+        Player nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+
+        for (Player player : players) {
+            if (!player.isAlive() || player.isRemoved()) {
+                continue;
+            }
+            double distance = steve.distanceTo(player);
+            if (distance < nearestDistance) {
+                nearest = player;
+                nearestDistance = distance;
+            }
+        }
+
+        protectedPlayer = nearest;
     }
 
     @Override
@@ -130,25 +242,31 @@ public class CombatAction extends BaseAction {
             return;
         }
 
+        // Periodically re-scan for new targets in the 200x200 area to catch spawned or missed mobs
+        // Also refresh the protected player in case they moved or disconnected
+        if (ticksRunning % 40 == 0) {
+            findProtectedPlayer();
+            findAllTargets();
+        }
+
         // Get next target from queue if current target is invalid
         if (target == null || !target.isAlive() || target.isRemoved()) {
             if (!targetQueue.isEmpty()) {
                 target = targetQueue.remove(0);
-                com.steve.ai.SteveMod.LOGGER.info("Steve '{}' switched to next target: {} ({} remaining)",
+                com.steve.ai.SteveMod.LOGGER.info("Steve '{}' switched to next target: {} ({} remaining in queue)",
                     steve.getSteveName(), target.getType().toString(), targetQueue.size());
             } else {
-                // Queue empty, try to find more targets
-                if (ticksRunning % 20 == 0) {
-                    findAllTargets();
-                }
+                // Queue empty after re-scan, check if truly complete
+                findAllTargets();
                 if (targetQueue.isEmpty()) {
-                    // No more targets - all eliminated
+                    // No more targets in 200x200 area around player - all eliminated
+                    String playerName = protectedPlayer != null ? protectedPlayer.getName().getString() : "unknown";
                     steve.setInvulnerableBuilding(false);
                     steve.setSprinting(false);
                     steve.getNavigation().stop();
-                    com.steve.ai.SteveMod.LOGGER.info("Steve '{}' all targets eliminated, invulnerability disabled",
-                        steve.getSteveName());
-                    result = ActionResult.success("All targets eliminated");
+                    com.steve.ai.SteveMod.LOGGER.info("Steve '{}' cleared all targets in 200x200 area around player '{}', invulnerability disabled",
+                        steve.getSteveName(), playerName);
+                    result = ActionResult.success("All targets eliminated in 200x200 area around player " + playerName);
                     return;
                 }
                 // Found new targets, get the first one
@@ -218,9 +336,28 @@ public class CombatAction extends BaseAction {
 
     /**
      * Find all valid targets and populate the target queue
+     * Searches in a 200x200 area (100 block radius from the protected player)
+     * This ensures we protect the player by clearing all monsters around them
      */
     private void findAllTargets() {
-        AABB searchBox = steve.getBoundingBox().inflate(32.0);
+        // Use protected player as center of search, or fall back to Steve's position
+        double centerX, centerY, centerZ;
+        if (protectedPlayer != null) {
+            centerX = protectedPlayer.getX();
+            centerY = protectedPlayer.getY();
+            centerZ = protectedPlayer.getZ();
+        } else {
+            centerX = steve.getX();
+            centerY = steve.getY();
+            centerZ = steve.getZ();
+        }
+
+        // Create search box centered on player (configurable radius)
+        AABB searchBox = new AABB(
+            centerX - playerSearchRadius, centerY - playerSearchRadius, centerZ - playerSearchRadius,
+            centerX + playerSearchRadius, centerY + playerSearchRadius, centerZ + playerSearchRadius
+        );
+
         List<Entity> entities = steve.level().getEntities(steve, searchBox);
 
         targetQueue.clear();
@@ -231,7 +368,7 @@ public class CombatAction extends BaseAction {
             }
         }
 
-        // Sort by distance (closest first)
+        // Sort by distance to Steve (so Steve attacks closest targets first for efficiency)
         targetQueue.sort((a, b) -> {
             double distA = steve.distanceTo(a);
             double distB = steve.distanceTo(b);
@@ -239,8 +376,10 @@ public class CombatAction extends BaseAction {
         });
 
         if (!targetQueue.isEmpty()) {
-            com.steve.ai.SteveMod.LOGGER.info("Steve '{}' found {} targets of type '{}'",
-                steve.getSteveName(), targetQueue.size(), targetType);
+            String centerName = protectedPlayer != null ? protectedPlayer.getName().getString() : "Steve";
+            int area = (int)(playerSearchRadius * 2);
+            com.steve.ai.SteveMod.LOGGER.info("Steve '{}' found {} targets of type '{}' in {}x{} area around {}",
+                steve.getSteveName(), targetQueue.size(), targetType, area, area, centerName);
         }
     }
 
@@ -260,9 +399,9 @@ public class CombatAction extends BaseAction {
             resolved = CREATURE_ALIASES.get(targetLower);
         }
 
-        // General match: hostile -> any Monster
+        // General match: hostile -> any Monster or Slime (Slime is not a Monster in Minecraft's class hierarchy)
         if (resolved.equals("hostile")) {
-            return entity instanceof Monster;
+            return entity instanceof Monster || entity instanceof Slime;
         }
 
         // Group matching

@@ -83,6 +83,11 @@ public class CoreActionsPlugin implements ActionPlugin {
             (steve, task, ctx) -> new FollowPlayerAction(steve, task),
             priority, PLUGIN_ID);
 
+        // Vehicle and equipment creation
+        registry.register("create",
+            (steve, task, ctx) -> new CreateVehicleAction(steve, task),
+            priority, PLUGIN_ID);
+
         LOGGER.info("CoreActionsPlugin loaded {} actions", registry.getActionCount());
     }
 

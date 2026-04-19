@@ -189,6 +189,12 @@ public class BuildStructureAction extends BaseAction {
             buildPlan = generateBuildPlan(structureType, clearPos, width, height, depth, selectedStyle);
         } else {
             SteveMod.LOGGER.info("Loaded '{}' from NBT template with {} blocks", structureType, buildPlan.size());
+            // Note: NBT templates have fixed blocks, style is applied at generation time
+        }
+        
+        // If we have a selected style but no build plan yet, generate with style
+        if (buildPlan == null && selectedStyle != null) {
+            buildPlan = generateBuildPlan(structureType, clearPos, width, height, depth, selectedStyle);
         }
         
         if (buildPlan == null || buildPlan.isEmpty()) {
@@ -202,8 +208,9 @@ public class BuildStructureAction extends BaseAction {
         
         if (collaborativeBuild != null) {
             isCollaborative = true;
-            SteveMod.LOGGER.info("Steve '{}' JOINING existing {} collaborative build at {}", 
-                steve.getSteveName(), structureType, collaborativeBuild.startPos);
+            SteveMod.LOGGER.info("Steve '{}' JOINING existing {} collaborative build at {} with style: {}", 
+                steve.getSteveName(), structureType, collaborativeBuild.startPos,
+                collaborativeBuild.getStyleName() != null ? collaborativeBuild.getStyleName() : "default");
         } else {
             List<BlockPlacement> collaborativeBlocks = new ArrayList<>();
             for (BlockPlacement bp : buildPlan) {

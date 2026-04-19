@@ -3,14 +3,17 @@ package com.steve.ai.action.actions;
 import com.steve.ai.SteveMod;
 import com.steve.ai.action.ActionResult;
 import com.steve.ai.action.Task;
+import com.steve.ai.config.SteveConfig;
 import com.steve.ai.entity.SteveEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.AABB;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,9 +33,10 @@ public class GatherResourceAction extends BaseAction {
     private BlockPos currentTarget;
     private int ticksRunning;
     private int ticksSinceLastGather;
-    private static final int MAX_TICKS = 6000; // 5 minutes timeout
+    private Player targetPlayer; // The player we're gathering for (center of search)
+    private static final int MAX_TICKS = 7200; // 6 minutes timeout
     private static final int GATHER_DELAY = 10; // Delay between gathering blocks
-    private static final int SEARCH_RADIUS = 32; // Search radius for resources
+    private int playerSearchRadius; // Configurable search radius (default 50 = 100x100 area)
 
     // Resource type mappings to handle variations
     private static final Map<String, String> RESOURCE_ALIASES = new HashMap<>() {{
@@ -111,6 +115,14 @@ public class GatherResourceAction extends BaseAction {
         // Berry aliases
         put("berry", "sweet_berry_bush");
         put("berries", "sweet_berry_bush");
+        // New simplified commands
+        put("everything", "group:all");
+        put("all", "group:all");
+        put("anything", "group:all");
+        put("stuff", "group:all");
+        put("collect", "group:all");
+        put("harvest", "group:all");
+        put("resources", "group:all");
     }};
 
     // Resource groups: generic name -> list of block IDs
@@ -131,6 +143,17 @@ public class GatherResourceAction extends BaseAction {
         put("stones", java.util.Arrays.asList(
             "stone", "cobblestone", "deepslate", "granite", "diorite", "andesite"
         ));
+        // New: "all" group for gathering everything useful
+        put("all", java.util.Arrays.asList(
+            "oak_log", "spruce_log", "birch_log", "jungle_log",
+            "acacia_log", "dark_oak_log", "mangrove_log", "cherry_log",
+            "poppy", "dandelion", "sunflower", "blue_orchid",
+            "allium", "azure_bluet", "oxeye_daisy", "cornflower", "lily_of_the_valley",
+            "red_mushroom", "brown_mushroom",
+            "sweet_berry_bush",
+            "cactus", "sugar_cane", "bamboo",
+            "wheat", "carrots", "potatoes", "beetroots"
+        ));
     }};
 
     public GatherResourceAction(SteveEntity steve, Task task) {
@@ -140,10 +163,17 @@ public class GatherResourceAction extends BaseAction {
     @Override
     protected void onStart() {
         resourceType = task.getStringParameter("resource");
-        targetQuantity = task.getIntParameter("quantity", 16);
+        targetQuantity = task.getIntParameter("quantity", 32); // Default to 32 for balanced gathering
         gatheredCount = 0;
         ticksRunning = 0;
         ticksSinceLastGather = 0;
+        targetPlayer = null;
+
+        // Load configurable search radius
+        playerSearchRadius = SteveConfig.GATHER_SEARCH_RADIUS.get();
+
+        // Find the nearest player to gather for (center of search area)
+        findTargetPlayer();
 
         if (resourceType == null || resourceType.isEmpty()) {
             result = ActionResult.failure("No resource type specified for gathering");
@@ -185,16 +215,46 @@ public class GatherResourceAction extends BaseAction {
             return;
         }
 
-        SteveMod.LOGGER.info("Steve '{}' starting to gather {} {} (target blocks: {})",
-            steve.getSteveName(), targetQuantity, resourceType, targetBlocks.size());
+        String playerName = targetPlayer != null ? targetPlayer.getName().getString() : "unknown";
+        int area = playerSearchRadius * 2;
+        SteveMod.LOGGER.info("Steve '{}' gathering for player '{}', target: {} {} (target blocks: {}) in {}x{} area",
+            steve.getSteveName(), playerName, targetQuantity, resourceType, targetBlocks.size(), area, area);
 
         // Find first target
         findNextBlock();
 
         if (currentTarget == null) {
-            SteveMod.LOGGER.warn("Steve '{}' could not find any {} nearby within {} blocks",
-                steve.getSteveName(), resourceType, SEARCH_RADIUS);
+            SteveMod.LOGGER.warn("Steve '{}' could not find any {} nearby player '{}' within {} blocks",
+                steve.getSteveName(), resourceType, playerName, playerSearchRadius);
         }
+    }
+
+    /**
+     * Find the nearest player to gather for (center of search area)
+     */
+    private void findTargetPlayer() {
+        List<? extends Player> players = steve.level().players();
+        if (players.isEmpty()) {
+            targetPlayer = null;
+            return;
+        }
+
+        // Find nearest player to Steve
+        Player nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+
+        for (Player player : players) {
+            if (!player.isAlive() || player.isRemoved()) {
+                continue;
+            }
+            double distance = steve.distanceTo(player);
+            if (distance < nearestDistance) {
+                nearest = player;
+                nearestDistance = distance;
+            }
+        }
+
+        targetPlayer = nearest;
     }
 
     @Override
@@ -223,16 +283,24 @@ public class GatherResourceAction extends BaseAction {
             return;
         }
 
+        // Periodically refresh player position and re-scan for new targets
+        if (ticksRunning % 40 == 0) {
+            findTargetPlayer();
+        }
+
         // Find target if we don't have one
         if (currentTarget == null) {
             findNextBlock();
 
             if (currentTarget == null) {
-                // No more targets found
+                // No more targets found in search area around player
+                String playerName = targetPlayer != null ? targetPlayer.getName().getString() : "unknown";
+                int area = playerSearchRadius * 2;
                 if (gatheredCount > 0) {
-                    result = ActionResult.success("Gathered " + gatheredCount + " " + resourceType + " (no more nearby)");
+                    result = ActionResult.success("Gathered " + gatheredCount + " " + resourceType + 
+                        " (no more in " + area + "x" + area + " area around " + playerName + ")");
                 } else {
-                    result = ActionResult.failure("No " + resourceType + " found nearby");
+                    result = ActionResult.failure("No " + resourceType + " found in " + area + "x" + area + " area around " + playerName);
                 }
                 return;
             }
@@ -305,18 +373,43 @@ public class GatherResourceAction extends BaseAction {
     }
 
     /**
-     * Find the nearest target block within search radius
+     * Find the nearest target block within search radius around the target player
+     * Searches in a configurable area centered on the player
      */
     private void findNextBlock() {
-        BlockPos stevePos = steve.blockPosition();
+        // Use target player as center of search, or fall back to Steve's position
+        double centerX, centerY, centerZ;
+        if (targetPlayer != null) {
+            centerX = targetPlayer.getX();
+            centerY = targetPlayer.getY();
+            centerZ = targetPlayer.getZ();
+        } else {
+            centerX = steve.getX();
+            centerY = steve.getY();
+            centerZ = steve.getZ();
+        }
+
+        // Create search box centered on player (configurable radius)
+        AABB searchBox = new AABB(
+            centerX - playerSearchRadius, centerY - playerSearchRadius / 2, centerZ - playerSearchRadius,
+            centerX + playerSearchRadius, centerY + playerSearchRadius / 2, centerZ + playerSearchRadius
+        );
+
         BlockPos nearest = null;
         double nearestDistance = Double.MAX_VALUE;
+        BlockPos stevePos = steve.blockPosition();
 
-        // Search in a cube around Steve
-        for (int dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx++) {
-            for (int dy = -SEARCH_RADIUS / 2; dy <= SEARCH_RADIUS / 2; dy++) {
-                for (int dz = -SEARCH_RADIUS; dz <= SEARCH_RADIUS; dz++) {
-                    BlockPos checkPos = stevePos.offset(dx, dy, dz);
+        // Search all blocks in the area
+        for (int dx = -playerSearchRadius; dx <= playerSearchRadius; dx++) {
+            for (int dy = -playerSearchRadius / 2; dy <= playerSearchRadius / 2; dy++) {
+                for (int dz = -playerSearchRadius; dz <= playerSearchRadius; dz++) {
+                    BlockPos checkPos = new BlockPos((int)centerX + dx, (int)centerY + dy, (int)centerZ + dz);
+                    
+                    // Skip if outside search box
+                    if (!searchBox.contains(checkPos.getX() + 0.5, checkPos.getY() + 0.5, checkPos.getZ() + 0.5)) {
+                        continue;
+                    }
+                    
                     BlockState state = steve.level().getBlockState(checkPos);
 
                     if (targetBlocks.contains(state.getBlock())) {
@@ -333,9 +426,11 @@ public class GatherResourceAction extends BaseAction {
         currentTarget = nearest;
 
         if (currentTarget != null) {
-            SteveMod.LOGGER.debug("Steve '{}' found {} at {} (distance: {})",
+            String centerName = targetPlayer != null ? targetPlayer.getName().getString() : "Steve";
+            int area = playerSearchRadius * 2;
+            SteveMod.LOGGER.debug("Steve '{}' found {} at {} (distance: {} from Steve, near {}, {}x{} area)",
                 steve.getSteveName(), resourceType,
-                currentTarget, Math.sqrt(nearestDistance));
+                currentTarget, Math.sqrt(nearestDistance), centerName, area, area);
         }
     }
 

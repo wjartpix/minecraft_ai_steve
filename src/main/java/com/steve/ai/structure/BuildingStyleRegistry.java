@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -21,6 +22,7 @@ public class BuildingStyleRegistry {
 
     private static final List<BuildingStyle> availableStyles = new ArrayList<>();
     private static final Map<String, BuildingStyle> styleMap = new HashMap<>();
+    private static final Set<String> historicallyUsedStyles = new HashSet<>();
     private static final Random random = new Random();
     private static boolean initialized = false;
 
@@ -90,7 +92,7 @@ public class BuildingStyleRegistry {
      * Returns a building style that hasn't been used yet.
      * If all styles have been used, returns a random one (cycling behavior).
      *
-     * @param usedStyles Set of style names already used
+     * @param usedStyles Set of style names already used in active builds
      * @return A building style not in usedStyles, or any style if all used
      */
     public static synchronized BuildingStyle getUniqueStyle(Set<String> usedStyles) {
@@ -99,10 +101,15 @@ public class BuildingStyleRegistry {
             return null;
         }
 
+        // Merge with historically used styles for better variety across sessions
+        Set<String> allUsedStyles = new HashSet<>();
+        allUsedStyles.addAll(usedStyles);
+        allUsedStyles.addAll(historicallyUsedStyles);
+
         // Find unused styles
         List<BuildingStyle> unusedStyles = new ArrayList<>();
         for (BuildingStyle style : availableStyles) {
-            if (!usedStyles.contains(style.name())) {
+            if (!allUsedStyles.contains(style.name())) {
                 unusedStyles.add(style);
             }
         }
@@ -111,14 +118,37 @@ public class BuildingStyleRegistry {
         if (!unusedStyles.isEmpty()) {
             // Return a random unused style
             selectedStyle = unusedStyles.get(random.nextInt(unusedStyles.size()));
-            LOGGER.debug("Selected unique building style: {}", selectedStyle.name());
+            LOGGER.info("Selected unique building style: {} ({} of {} styles available)", 
+                selectedStyle.name(), unusedStyles.size(), availableStyles.size());
         } else {
             // All styles used, cycle and return random one
             selectedStyle = availableStyles.get(random.nextInt(availableStyles.size()));
-            LOGGER.debug("All styles used, cycling with random style: {}", selectedStyle.name());
+            LOGGER.info("All styles used, cycling with random style: {}", selectedStyle.name());
+            // Clear history when all styles have been used to start fresh
+            historicallyUsedStyles.clear();
         }
 
+        // Track this style as historically used
+        historicallyUsedStyles.add(selectedStyle.name());
+
         return selectedStyle;
+    }
+
+    /**
+     * Clears the historical style usage tracking.
+     * Call this when you want to reset style rotation.
+     */
+    public static synchronized void clearHistoricalUsage() {
+        historicallyUsedStyles.clear();
+        LOGGER.info("Cleared historical style usage tracking");
+    }
+
+    /**
+     * Gets the set of historically used styles.
+     * @return Set of style names that have been used
+     */
+    public static Set<String> getHistoricallyUsedStyles() {
+        return new HashSet<>(historicallyUsedStyles);
     }
 
     /**

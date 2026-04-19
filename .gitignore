@@ -1,0 +1,6 @@
+.DS
+run
+.DS_Store
+.vscode
+.gradle
+build

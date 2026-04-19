@@ -46,6 +46,10 @@ public class SteveConfig {
     public static final ForgeConfigSpec.BooleanValue BUILDING_STYLES_ENABLED;
     public static final ForgeConfigSpec.ConfigValue<String> BUILDING_STYLES;
 
+    // Search radius configuration for Combat and Gather actions
+    public static final ForgeConfigSpec.IntValue COMBAT_SEARCH_RADIUS;
+    public static final ForgeConfigSpec.IntValue GATHER_SEARCH_RADIUS;
+
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
@@ -177,8 +181,26 @@ public class SteveConfig {
             .define("enableMultipleStyles", true);
 
         BUILDING_STYLES = builder
-            .comment("Comma-separated list of enabled building styles: oak_classic,spruce_cabin,birch_cottage,stone_fortress,sandstone_desert,dark_oak_manor,brick_house,jungle_hut")
-            .define("styles", "oak_classic,spruce_cabin,birch_cottage,stone_fortress,sandstone_desert,dark_oak_manor,brick_house,jungle_hut");
+            .comment("Comma-separated list of enabled building styles:\n" +
+                "Original: oak_classic,spruce_cabin,birch_cottage,stone_fortress,sandstone_desert,dark_oak_manor,brick_house,jungle_hut\n" +
+                "New: acacia_outpost,cherry_blossom,bamboo_retreat,mangrove_swamp,deepslate_cavern,nether_brick_fortress,warped_forest,crimson_hunting_lodge")
+            .define("styles", "oak_classic,spruce_cabin,birch_cottage,stone_fortress,sandstone_desert,dark_oak_manor,brick_house,jungle_hut,acacia_outpost,cherry_blossom,bamboo_retreat,mangrove_swamp,deepslate_cavern,nether_brick_fortress,warped_forest,crimson_hunting_lodge");
+
+        builder.pop();
+
+        builder.comment("Search Radius Configuration").push("search");
+
+        COMBAT_SEARCH_RADIUS = builder
+            .comment("Search radius for combat actions (kill mobs, attack).\n" +
+                "Default: 50 blocks radius = 100x100 area around player.\n" +
+                "Larger values cover more area but may impact performance.")
+            .defineInRange("combatRadius", 50, 10, 200);
+
+        GATHER_SEARCH_RADIUS = builder
+            .comment("Search radius for gather actions (get wood, flowers, etc.).\n" +
+                "Default: 50 blocks radius = 100x100 area around player.\n" +
+                "Larger values cover more area but may impact performance.")
+            .defineInRange("gatherRadius", 50, 10, 200);
 
         builder.pop();
 

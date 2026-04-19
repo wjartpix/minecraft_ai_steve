@@ -16,29 +16,43 @@ public class PromptBuilder {
             ACTIONS:
             - attack: {"target": "TARGET"}
               Target options:
-                "hostile" / "mob" / "monster" - attack any hostile creature nearby
+                "hostile" / "mob" / "monster" - attack any hostile creature nearby (includes zombies, skeletons, creepers, spiders, slimes, etc.)
                 "undead" - zombies, skeletons, husks, strays, drowned, etc.
                 "flying" - phantoms, ghasts, vex, breeze
                 "nether" - blaze, ghast, wither_skeleton, magma_cube, etc.
                 "raid" - pillager, vindicator, evoker, ravager, vex
-              Specific mobs: zombie, skeleton, creeper, spider, enderman, witch, phantom, blaze, ghast, etc.
+                "slime" - slimes and magma_cubes
+              Specific mobs: zombie, skeleton, creeper, spider, enderman, witch, phantom, blaze, ghast, slime, magma_cube, etc.
               When user says "kill mobs" or "clear enemies", use "hostile" as target.
               When user specifies a type like "skeleton", use that specific name.
+              Note: "slime" includes both green slimes and magma cubes.
             - build: {"structure": "house", "blocks": ["oak_planks", "cobblestone", "glass_pane"], "dimensions": [9, 6, 9]}
             - mine: {"block": "iron", "quantity": 8} (resources: iron, diamond, coal, gold, copper, redstone, emerald)
             - gather: {"resource": "<resource>", "quantity": <n>}
-              Resource groups (searches for any block in group):
+              Resource groups (searches for any block in group, 200x200 area around player):
                 "logs" - any wood log (oak, spruce, birch, jungle, acacia, dark_oak, mangrove, cherry)
                 "flowers" - any flower
                 "mushrooms" - any mushroom
                 "ores" - any ore
                 "stones" - any stone type
+                "all" / "everything" - ALL useful resources (logs, flowers, mushrooms, berries, crops, etc.)
               Specific blocks: oak_log, spruce_log, birch_log, jungle_log, acacia_log, dark_oak_log, mangrove_log, cherry_log, poppy, dandelion, red_mushroom, brown_mushroom, etc.
               When user says generic "chop trees" or "gather wood", use "logs" as resource.
+              When user says "gather everything" or "collect all" or "harvest resources", use "all" as resource.
               When user specifies a type like "birch", use the specific block "birch_log".
+              When user says "gather all" or "collect everything", use "all" with quantity 64 as default.
+              Simplified commands: "get wood", "get flowers", "get mushrooms", "collect everything" should use appropriate group with quantity 64.
             - craft: {"item": "oak_planks", "quantity": 4} (crafting items)
             - follow: {"player": "NAME"}
             - pathfind: {"x": 0, "y": 0, "z": 0}
+            - create: {"vehicle": "TYPE"} (create vehicles and equipment)
+              Vehicle types:
+                "rocket" / "spaceship" - create a space rocket with fins and cone
+                "railway" / "rail" / "track" - create railway tracks with powered rails
+                "aircraft" / "plane" / "jet" - create an airplane with wings
+                "cannon" / "artillery" - create a TNT cannon
+                "event_gear" / "party" / "fireworks" - create event stage with fireworks
+              When user says "build a rocket", "make a plane", "create railway", use create action with appropriate vehicle type.
 
             RULES:
             1. Use "hostile" for generic mob attacks, specific names for targeted attacks
