@@ -1,7 +1,6 @@
 package com.steve.ai.action.actions;
 
 import com.steve.ai.SteveMod;
-import com.steve.ai.action.ActionResult;
 import com.steve.ai.action.Task;
 import com.steve.ai.entity.SteveEntity;
 import net.minecraft.world.entity.player.Player;
@@ -17,7 +16,9 @@ import java.util.List;
 public class IdleFollowAction extends BaseAction {
     private Player targetPlayer;
     private int ticksSincePlayerSearch;
+    private int ticksSinceLastNavUpdate;
     private static final int PLAYER_SEARCH_INTERVAL = 100; // Search for new player every 5 seconds
+    private static final int NAV_UPDATE_INTERVAL = 15;    // Recalculate path every N ticks (0.75s)
     private static final double FOLLOW_DISTANCE = 4.0; // Stay this far from player
     private static final double MIN_DISTANCE = 2.5; // Stop moving if closer than this
     private static final double TELEPORT_DISTANCE = 50.0; // Teleport if further than 50 blocks
@@ -29,6 +30,7 @@ public class IdleFollowAction extends BaseAction {
     @Override
     protected void onStart() {
         ticksSincePlayerSearch = 0;
+        ticksSinceLastNavUpdate = NAV_UPDATE_INTERVAL; // Force first update immediately
         findNearestPlayer();
         
         if (targetPlayer == null) {
@@ -39,6 +41,7 @@ public class IdleFollowAction extends BaseAction {
     @Override
     protected void onTick() {
         ticksSincePlayerSearch++;
+        ticksSinceLastNavUpdate++;
         
         // Periodically search for a better/closer player
         if (ticksSincePlayerSearch >= PLAYER_SEARCH_INTERVAL) {
@@ -79,19 +82,26 @@ public class IdleFollowAction extends BaseAction {
             
             steve.teleportTo(targetX, targetY, targetZ);
             steve.getNavigation().stop(); // Clear navigation after teleport
+            ticksSinceLastNavUpdate = NAV_UPDATE_INTERVAL; // Force nav update next tick
             
             SteveMod.LOGGER.info("Steve '{}' teleported to player (was {} blocks away)", 
                 steve.getSteveName(), (int)distance);
             
         } else if (distance > FOLLOW_DISTANCE) {
-            // Too far, move closer (normal walking)
-            steve.getNavigation().moveTo(targetPlayer, 1.0);
+            // Too far, move closer - but don't call moveTo() every tick!
+            // Only recalculate path periodically or when navigation is done
+            if (ticksSinceLastNavUpdate >= NAV_UPDATE_INTERVAL || steve.getNavigation().isDone()) {
+                steve.getNavigation().moveTo(targetPlayer, 1.0);
+                ticksSinceLastNavUpdate = 0;
+            }
         } else if (distance < MIN_DISTANCE) {
             // Too close, stop
             steve.getNavigation().stop();
+            ticksSinceLastNavUpdate = NAV_UPDATE_INTERVAL; // Force nav update when player moves away
         } else {
-            if (!steve.getNavigation().isDone()) {
-                steve.getNavigation().stop();
+            // Within comfortable range - let current navigation continue
+            if (steve.getNavigation().isDone()) {
+                // Arrived at comfortable distance, stand still
             }
         }
         

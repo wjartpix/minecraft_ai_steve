@@ -220,6 +220,12 @@ public class ActionExecutor {
                 }
                 
                 currentAction = null;
+                
+                // If no more tasks, clear the goal so idle follow can resume
+                if (taskQueue.isEmpty()) {
+                    currentGoal = null;
+                    steve.getMemory().setCurrentGoal("");
+                }
             } else {
                 if (ticksSinceLastAction % 100 == 0) {
                     SteveMod.LOGGER.info("Steve '{}' - Ticking action: {}", 
@@ -239,7 +245,8 @@ public class ActionExecutor {
             }
         }
         
-        // When completely idle (no tasks, no goal), follow nearest player
+        // When completely idle (no tasks, no action), follow nearest player
+        // currentGoal is cleared when all tasks are done, so idle follow can resume
         if (taskQueue.isEmpty() && currentAction == null && currentGoal == null) {
             if (idleFollowAction == null) {
                 idleFollowAction = new IdleFollowAction(steve);

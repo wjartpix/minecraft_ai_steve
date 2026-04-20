@@ -10,7 +10,17 @@ public class FollowPlayerAction extends BaseAction {
     private String playerName;
     private Player targetPlayer;
     private int ticksRunning;
+    private int ticksSinceLastNavUpdate;
     private static final int MAX_TICKS = 6000; // 5 minutes
+    private static final double FOLLOW_DISTANCE = 3.0;  // Start following beyond this distance
+    private static final double STOP_DISTANCE = 2.0;    // Stop moving when closer than this
+    private static final double TELEPORT_DISTANCE = 50.0; // Teleport if further than this
+    private static final int NAV_UPDATE_INTERVAL = 10;   // Recalculate path every N ticks (0.5s)
+    private static final double NAV_UPDATE_MIN_DELTA = 2.0; // Or if target moved this far since last path
+
+    private double lastNavTargetX;
+    private double lastNavTargetY;
+    private double lastNavTargetZ;
 
     public FollowPlayerAction(SteveEntity steve, Task task) {
         super(steve, task);
@@ -20,21 +30,27 @@ public class FollowPlayerAction extends BaseAction {
     protected void onStart() {
         playerName = task.getStringParameter("player");
         ticksRunning = 0;
-        
+        ticksSinceLastNavUpdate = 0;
+        lastNavTargetX = Double.NaN;
+        lastNavTargetY = Double.NaN;
+        lastNavTargetZ = Double.NaN;
+
         // Handle special placeholder from LLM prompt
-        if (playerName == null || 
+        if (playerName == null ||
+            playerName.equalsIgnoreCase("nearest") ||
+            playerName.equalsIgnoreCase("me") ||
             playerName.equals("USE_NEARBY_PLAYER_NAME") ||
             playerName.equals("PLAYER_NAME") ||
             playerName.equals("NEAREST_PLAYER")) {
             playerName = null; // Will trigger nearest player search
         }
-        
+
         findPlayer();
-        
+
         if (targetPlayer == null) {
             result = ActionResult.failure("Player not found: " + (playerName != null ? playerName : "(no specific player specified)"));
         } else {
-            com.steve.ai.SteveMod.LOGGER.info("Steve '{}' started following player '{}'", 
+            com.steve.ai.SteveMod.LOGGER.info("Steve '{}' started following player '{}'",
                 steve.getSteveName(), targetPlayer.getName().getString());
         }
     }
@@ -42,12 +58,13 @@ public class FollowPlayerAction extends BaseAction {
     @Override
     protected void onTick() {
         ticksRunning++;
-        
+        ticksSinceLastNavUpdate++;
+
         if (ticksRunning > MAX_TICKS) {
             result = ActionResult.success("Stopped following");
             return;
         }
-        
+
         if (targetPlayer == null || !targetPlayer.isAlive() || targetPlayer.isRemoved()) {
             findPlayer();
             if (targetPlayer == null) {
@@ -55,25 +72,126 @@ public class FollowPlayerAction extends BaseAction {
                 return;
             }
         }
-        
+
         double distance = steve.distanceTo(targetPlayer);
         double horizontalDistance = Math.sqrt(
-            Math.pow(steve.getX() - targetPlayer.getX(), 2) + 
+            Math.pow(steve.getX() - targetPlayer.getX(), 2) +
             Math.pow(steve.getZ() - targetPlayer.getZ(), 2)
         );
         double verticalDistance = Math.abs(steve.getY() - targetPlayer.getY());
-        
-        if (distance > 3.0) {
-            // Check if player is significantly above or below Steve (e.g., on roof or in pit)
+
+        // Teleport if way too far away
+        if (distance > TELEPORT_DISTANCE) {
+            teleportNearPlayer();
+            return;
+        }
+
+        if (distance > FOLLOW_DISTANCE) {
+            // Player is on a different Y level - try to teleport closer
             if (verticalDistance > 3.0 && horizontalDistance < 10.0) {
-                // Player is on different level - try to teleport closer
                 teleportToPlayerLevel();
             } else {
-                steve.getNavigation().moveTo(targetPlayer, 1.0);
+                // Only recalculate navigation path when needed (not every tick!)
+                // This prevents path computation from being reset constantly
+                updateNavigation();
             }
-        } else if (distance < 2.0) {
+        } else if (distance < STOP_DISTANCE) {
             steve.getNavigation().stop();
+            resetNavTarget();
+        } else {
+            // Within comfortable range (STOP_DISTANCE .. FOLLOW_DISTANCE)
+            // Let current navigation continue, or stand still if already stopped
+            if (steve.getNavigation().isDone()) {
+                // Navigation finished and we're at comfortable distance, just stand
+            }
         }
+    }
+
+    /**
+     * Update navigation to target player.
+     * Only recalculates the path when the interval has elapsed OR the target
+     * has moved significantly since the last path was set.
+     * This prevents the path from being reset every tick, which would stop
+     * the mob from ever completing a path and actually moving.
+     */
+    private void updateNavigation() {
+        if (targetPlayer == null) return;
+
+        double targetX = targetPlayer.getX();
+        double targetY = targetPlayer.getY();
+        double targetZ = targetPlayer.getZ();
+
+        boolean needsUpdate = false;
+
+        // Check if enough ticks have passed since last update
+        if (ticksSinceLastNavUpdate >= NAV_UPDATE_INTERVAL) {
+            needsUpdate = true;
+        }
+
+        // Check if target has moved significantly since last path was set
+        if (!Double.isNaN(lastNavTargetX)) {
+            double delta = Math.sqrt(
+                Math.pow(targetX - lastNavTargetX, 2) +
+                Math.pow(targetY - lastNavTargetY, 2) +
+                Math.pow(targetZ - lastNavTargetZ, 2)
+            );
+            if (delta > NAV_UPDATE_MIN_DELTA) {
+                needsUpdate = true;
+            }
+        } else {
+            // First time, always set navigation
+            needsUpdate = true;
+        }
+
+        // Also update if navigation is done (mob arrived but target moved again)
+        if (steve.getNavigation().isDone()) {
+            needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+            steve.getNavigation().moveTo(targetPlayer, 1.0);
+            lastNavTargetX = targetX;
+            lastNavTargetY = targetY;
+            lastNavTargetZ = targetZ;
+            ticksSinceLastNavUpdate = 0;
+        }
+    }
+
+    private void resetNavTarget() {
+        lastNavTargetX = Double.NaN;
+        lastNavTargetY = Double.NaN;
+        lastNavTargetZ = Double.NaN;
+        ticksSinceLastNavUpdate = 0;
+    }
+
+    /**
+     * Teleport Steve near the target player when too far away.
+     */
+    private void teleportNearPlayer() {
+        if (targetPlayer == null) return;
+
+        double offsetX = (Math.random() - 0.5) * 6;
+        double offsetZ = (Math.random() - 0.5) * 6;
+        double targetX = targetPlayer.getX() + offsetX;
+        double targetY = targetPlayer.getY();
+        double targetZ = targetPlayer.getZ() + offsetZ;
+
+        net.minecraft.core.BlockPos checkPos = new net.minecraft.core.BlockPos((int)targetX, (int)targetY, (int)targetZ);
+        for (int i = 0; i < 10; i++) {
+            net.minecraft.core.BlockPos groundPos = checkPos.below(i);
+            if (!steve.level().getBlockState(groundPos).isAir() &&
+                steve.level().getBlockState(groundPos.above()).isAir()) {
+                targetY = groundPos.above().getY();
+                break;
+            }
+        }
+
+        steve.teleportTo(targetX, targetY, targetZ);
+        steve.getNavigation().stop();
+        resetNavTarget();
+
+        com.steve.ai.SteveMod.LOGGER.info("Steve '{}' teleported to player (was {} blocks away)",
+            steve.getSteveName(), (int)steve.distanceTo(targetPlayer));
     }
     
     private void teleportToPlayerLevel() {

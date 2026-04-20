@@ -71,29 +71,35 @@ public class AsyncQwenClient implements AsyncLLMClient {
         this.maxTokens = maxTokens;
         this.temperature = temperature;
 
-        // Build HttpClient with proxy configuration
+        // Build HttpClient - Qwen (DashScope) is a domestic Chinese API,
+        // proxy is NOT needed by default. Only use proxy when explicitly enabled.
         HttpClient.Builder clientBuilder = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_2)
             .connectTimeout(Duration.ofSeconds(10));
-        
-        // Configure proxy
-        String proxyHost = SteveConfig.PROXY_HOST.get();
-        int proxyPort = SteveConfig.PROXY_PORT.get();
-        
-        if (proxyHost != null && !proxyHost.isEmpty() && proxyPort > 0) {
-            // Use configured proxy
-            clientBuilder.proxy(ProxySelector.of(new InetSocketAddress(proxyHost, proxyPort)));
-            LOGGER.info("Using configured HTTP proxy: {}:{}", proxyHost, proxyPort);
+
+        boolean useProxy = SteveConfig.QWEN_USE_PROXY.get();
+
+        if (useProxy) {
+            // Proxy explicitly enabled for Qwen - use configured proxy
+            String proxyHost = SteveConfig.PROXY_HOST.get();
+            int proxyPort = SteveConfig.PROXY_PORT.get();
+
+            if (proxyHost != null && !proxyHost.isEmpty() && proxyPort > 0) {
+                clientBuilder.proxy(ProxySelector.of(new InetSocketAddress(proxyHost, proxyPort)));
+                LOGGER.info("Using configured HTTP proxy for Qwen: {}:{}", proxyHost, proxyPort);
+            } else {
+                clientBuilder.proxy(ProxySelector.getDefault());
+                LOGGER.debug("Qwen proxy enabled but no proxy configured, using system default");
+            }
         } else {
-            // Use system default proxy (from JVM system properties or environment)
-            clientBuilder.proxy(ProxySelector.getDefault());
-            LOGGER.debug("Using system default proxy configuration");
+            // No proxy - direct connection (default for domestic Chinese API)
+            LOGGER.info("Qwen direct connection (proxy disabled, DashScope is a domestic API)");
         }
-        
+
         this.httpClient = clientBuilder.build();
 
-        LOGGER.info("AsyncQwenClient initialized (model: {}, maxTokens: {}, temperature: {})",
-            model, maxTokens, temperature);
+        LOGGER.info("AsyncQwenClient initialized (model: {}, maxTokens: {}, temperature: {}, proxy: {})",
+            model, maxTokens, temperature, useProxy);
     }
 
     @Override

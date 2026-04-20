@@ -31,6 +31,7 @@ public class SteveConfig {
     public static final ForgeConfigSpec.ConfigValue<String> QWEN_MODEL;
     public static final ForgeConfigSpec.IntValue QWEN_MAX_TOKENS;
     public static final ForgeConfigSpec.DoubleValue QWEN_TEMPERATURE;
+    public static final ForgeConfigSpec.BooleanValue QWEN_USE_PROXY;
     
     // Behavior Configuration
     public static final ForgeConfigSpec.IntValue ACTION_TICK_DELAY;
@@ -138,7 +139,13 @@ public class SteveConfig {
         QWEN_TEMPERATURE = builder
             .comment("Temperature for AI responses")
             .defineInRange("temperature", 0.7, 0.0, 2.0);
-        
+
+        QWEN_USE_PROXY = builder
+            .comment("Enable HTTP proxy for Qwen API connections.",
+                     "Qwen (DashScope) is a domestic Chinese API and typically does not require a proxy.",
+                     "Only enable this if you need proxy access to Qwen from outside China.")
+            .define("useProxy", false);
+
         builder.pop();
 
         builder.comment("Steve Behavior Configuration").push("behavior");

@@ -57,6 +57,11 @@
     
     # Temperature (0.0-2.0, lower is more deterministic)
     temperature = 0.7
+    
+    # Enable HTTP proxy for Qwen API connections
+    # Qwen (DashScope) is a domestic Chinese API and typically does NOT require a proxy
+    # Only enable this if you need proxy access to Qwen from outside China
+    useProxy = false
 
 [behavior]
     # Ticks between action checks (20 ticks = 1 second)
@@ -74,6 +79,8 @@
     apiBaseUrl = ""
     
     # Proxy host for HTTP connections (leave empty to use system proxy or no proxy)
+    # Note: This proxy is used by OpenAI, Groq, and Gemini clients (foreign APIs)
+    # Qwen uses a separate 'useProxy' config in the [qwen] section
     proxyHost = "127.0.0.1"
     
     # Proxy port for HTTP connections (0 to disable)
