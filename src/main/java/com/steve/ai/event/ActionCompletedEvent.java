@@ -10,7 +10,7 @@ import java.time.Instant;
  *
  * @since 1.1.0
  */
-public class ActionCompletedEvent {
+public class ActionCompletedEvent implements DomainEvent {
 
     private final String agentId;
     private final String actionName;

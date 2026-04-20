@@ -7,6 +7,32 @@
 
 ---
 
+## 🚀 快速开始 - 极简指令
+
+Steve AI 支持**极简自然语言指令**，无需记忆复杂命令：
+
+```
+┌─────────────────────────────────────┐
+│  🏠 build        → 建造随机风格房屋 │
+│  🌲 collect      → 收集所有资源     │
+│  ⚔️ fight        → 清除怪物         │
+│  👣 follow       → 跟随玩家         │
+│  ⛏️ mine         → 挖矿             │
+└─────────────────────────────────────┘
+```
+
+**使用示例**:
+```bash
+/steve spawn Bob
+/steve tell Bob build           # Bob 立即开始建造
+/steve tell Bob collect everything  # 收集所有资源
+/steve tell Bob fight           # 清除周围怪物
+```
+
+> 📖 **详细指令手册**: [USER_GUIDE_SIMPLE.md](USER_GUIDE_SIMPLE.md)
+
+---
+
 ## 目录
 
 1. [业务需求场景](#一业务需求场景)
@@ -75,7 +101,11 @@ Steve AI 功能树
 │
 ├── 核心能力层
 │   ├── 自然语言理解 (NLP)
-│   │   └── LLM 集成: OpenAI / Groq / Gemini / Qwen
+│   │   ├── LLM 集成: OpenAI / Groq / Gemini / Qwen
+│   │   └── 简化指令解析 (SimpleCommandParser)
+│   │       ├── 单字指令: build/fight/collect/follow/mine
+│   │       ├── 资源收集: collect everything/get wood/get flowers
+│   │       └── 智能匹配: 自然语言关键词提取
 │   ├── 任务规划 (Task Planning)
 │   │   └── 自然语言 → 结构化任务序列
 │   └── 动作执行 (Action Execution)
@@ -83,20 +113,21 @@ Steve AI 功能树
 │
 ├── 游戏操作域
 │   ├── 建筑系统
-│   │   ├── 16种建筑风格 (经典橡木/云杉/白桦/石砖/沙岩/深色橡木/砖瓦/丛林/金合欢/樱花/竹林/红树林/深板岩/下界砖/诡异/绯红)
-│   │   ├── 9种建筑类型 (房屋/老房子/发电厂/城堡/塔楼/谷仓/现代/墙壁/平台/立方体)
+│   │   ├── 20种建筑风格 (经典橡木/云杉/白桦/石砖/沙岩/深色橡木/砖瓦/丛林/金合欢/樱花/竹林/红树林/深板岩/下界砖/诡异/绯红/石英/铜/紫水晶/蜂蜜)
+│   │   ├── 10种建筑类型 (温馨小屋/家庭住宅/豪华别墅/农舍/工坊/图书馆/酒馆/塔楼/花园凉亭/商铺)
 │   │   ├── 协作构建 (多Steve并行)
-│   │   └── 自动选址 (地形分析)
+│   │   ├── 自动选址 (地形分析)
+│   │   └── 多样化生成 (每次建造不同类型)
 │   ├── 挖矿系统
 │   │   ├── 智能深度挖矿 (根据矿石类型自动前往合适深度)
 │   │   ├── 单向隧道 (根据玩家视线方向)
 │   │   ├── 自动火把照明 (每5秒检查光线)
 │   │   └── 8种矿石目标 (钻石/红石/青金石/金/铁/铜/煤/绿宝石)
 │   ├── 采集系统
-│   │   ├── 5种资源分组 (木材/花朵/蘑菇/矿石/石头)
+│   │   ├── 6种资源分组 (木材/花朵/蘑菇/矿石/石头/全部)
 │   │   ├── 8种木材类型
 │   │   ├── 玩家中心搜索 (200×200格范围)
-│   │   └── 简化指令支持 (get wood/flowers/mushrooms)
+│   │   └── 超级简化指令 (collect everything/get stuff)
 │   ├── 战斗系统
 │   │   ├── 7个生物分组 (亡灵/飞行/下界/劫掠/首领/远程/史莱姆)
 │   │   ├── 玩家中心搜索 (200×200格范围，保护玩家)
@@ -124,6 +155,7 @@ Steve AI 功能树
 └── 用户交互
     ├── GUI 面板 (K键, Cursor风格界面)
     ├── 命令系统 (/steve spawn, tell, list, stop)
+    ├── 简化指令系统 (build/fight/collect/follow)
     └── 聊天反馈 (执行状态/错误报告)
 ```
 
@@ -897,7 +929,7 @@ public class SteveConfig {
 | | `llm/async/AsyncQwenClient.java` | 异步千问客户端 |
 | **弹性层** | `llm/resilience/ResilientLLMClient.java` | 熔断/重试/限流/缓存 |
 
-#### 4.3.3 动作系统
+#### 4.3.3 执行引擎
 
 | 模块 | 关键文件 | 职责 |
 |------|----------|------|
@@ -907,6 +939,7 @@ public class SteveConfig {
 | **日志拦截器** | `execution/LoggingInterceptor.java` | 动作日志记录 |
 | **指标拦截器** | `execution/MetricsInterceptor.java` | 性能指标收集 |
 | **事件拦截器** | `execution/EventPublishingInterceptor.java` | 事件发布 |
+| **简化指令解析** | `execution/SimpleCommandParser.java` | 极简指令解析 (build/fight/collect) |
 | **动作基类** | `action/Task.java` | 任务定义 |
 | | `action/ActionResult.java` | 结果封装 |
 | **建筑动作** | `action/actions/BuildStructureAction.java` | 建筑生成(667行，16种风格) |

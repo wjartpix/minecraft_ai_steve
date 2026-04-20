@@ -278,6 +278,16 @@ public class ResilientLLMClient implements AsyncLLMClient {
         return circuitBreaker.getState() != CircuitBreaker.State.OPEN;
     }
 
+    @Override
+    public String getDefaultModel() {
+        return delegate.getDefaultModel();
+    }
+
+    @Override
+    public int getMaxTokens() {
+        return delegate.getMaxTokens();
+    }
+
     /**
      * Returns the current circuit breaker state.
      *

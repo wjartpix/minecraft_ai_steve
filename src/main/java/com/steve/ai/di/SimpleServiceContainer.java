@@ -53,9 +53,24 @@ public class SimpleServiceContainer implements ServiceContainer {
      */
     private final ConcurrentHashMap<String, Object> namedRegistry;
 
+    /**
+     * Lifecycle manager for registered services.
+     */
+    private final ServiceLifecycleManager lifecycleManager;
+
     public SimpleServiceContainer() {
         this.typeRegistry = new ConcurrentHashMap<>();
         this.namedRegistry = new ConcurrentHashMap<>();
+        this.lifecycleManager = new ServiceLifecycleManager(this);
+    }
+
+    /**
+     * Returns the lifecycle manager for this container.
+     *
+     * @return Lifecycle manager
+     */
+    public ServiceLifecycleManager getLifecycleManager() {
+        return lifecycleManager;
     }
 
     @Override
@@ -73,6 +88,11 @@ public class SimpleServiceContainer implements ServiceContainer {
         } else {
             LOGGER.debug("Registered service for type: {}", serviceType.getSimpleName());
         }
+
+        // Register for lifecycle management if applicable
+        if (instance instanceof Lifecycle) {
+            lifecycleManager.register((Lifecycle) instance);
+        }
     }
 
     @Override
@@ -89,6 +109,11 @@ public class SimpleServiceContainer implements ServiceContainer {
             LOGGER.debug("Replaced named service: {}", name);
         } else {
             LOGGER.debug("Registered named service: {}", name);
+        }
+
+        // Register for lifecycle management if applicable
+        if (instance instanceof Lifecycle) {
+            lifecycleManager.register((Lifecycle) instance);
         }
     }
 

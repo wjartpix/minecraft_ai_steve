@@ -290,4 +290,14 @@ public class AsyncOpenAIClient implements AsyncLLMClient {
         // Base client is always healthy; resilience layer checks circuit breaker
         return true;
     }
+
+    @Override
+    public String getDefaultModel() {
+        return model;
+    }
+
+    @Override
+    public int getMaxTokens() {
+        return maxTokens;
+    }
 }

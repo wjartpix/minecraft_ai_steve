@@ -1,14 +1,14 @@
 package com.steve.ai.llm.async;
 
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import com.steve.ai.api.llm.LLMClient;
 
 /**
  * Asynchronous interface for LLM (Large Language Model) clients.
  * Provides non-blocking API calls using CompletableFuture to prevent game thread blocking.
  *
- * <p>This interface is implemented by provider-specific clients (OpenAI, Groq, Gemini)
- * and wrapped by ResilientLLMClient for fault tolerance patterns.</p>
+ * <p>This interface extends the base LLMClient interface and is implemented by
+ * provider-specific clients (OpenAI, Groq, Gemini) and wrapped by ResilientLLMClient
+ * for fault tolerance patterns.</p>
  *
  * <p><b>Design Pattern:</b> Strategy pattern for pluggable LLM providers</p>
  *
@@ -29,50 +29,9 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see LLMResponse
  * @see LLMException
+ * @see LLMClient
  * @since 1.1.0
  */
-public interface AsyncLLMClient {
-
-    /**
-     * Sends an asynchronous request to the LLM provider.
-     *
-     * <p>This method returns immediately with a CompletableFuture, allowing the calling
-     * thread (typically the game thread) to continue without blocking. The actual HTTP
-     * request is executed on a provider-specific thread pool managed by LLMExecutorService.</p>
-     *
-     * <p><b>Thread Safety:</b> This method is thread-safe and can be called concurrently
-     * from multiple threads. The underlying thread pool handles concurrency.</p>
-     *
-     * @param prompt   The text prompt to send to the LLM
-     * @param params   Additional parameters for the request (model, maxTokens, temperature, etc.)
-     *                 Expected keys: "model" (String), "maxTokens" (Integer), "temperature" (Double)
-     * @return A CompletableFuture that will complete with the LLM response
-     * @throws IllegalArgumentException if prompt is null or empty, or required params are missing
-     * @see LLMResponse
-     * @see LLMException
-     */
-    CompletableFuture<LLMResponse> sendAsync(String prompt, Map<String, Object> params);
-
-    /**
-     * Returns the unique identifier for this LLM provider.
-     *
-     * <p>Used for logging, metrics, and thread pool selection. Must be one of:
-     * "openai", "groq", "gemini"</p>
-     *
-     * @return Provider ID (lowercase, e.g., "openai", "groq", "gemini")
-     */
-    String getProviderId();
-
-    /**
-     * Checks if the client is healthy and able to accept requests.
-     *
-     * <p>Returns false if the circuit breaker is OPEN, indicating the provider
-     * is experiencing failures. When unhealthy, requests will be rejected
-     * immediately without attempting the HTTP call.</p>
-     *
-     * <p><b>Use Case:</b> Health checks, load balancer decisions, monitoring dashboards</p>
-     *
-     * @return true if client is healthy (circuit breaker CLOSED or HALF_OPEN), false if circuit is OPEN
-     */
-    boolean isHealthy();
+public interface AsyncLLMClient extends LLMClient {
+    // All methods inherited from LLMClient
 }

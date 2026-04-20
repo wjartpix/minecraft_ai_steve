@@ -10,7 +10,7 @@ import java.util.Map;
  *
  * @since 1.1.0
  */
-public class ActionStartedEvent {
+public class ActionStartedEvent implements DomainEvent {
 
     private final String agentId;
     private final String actionName;

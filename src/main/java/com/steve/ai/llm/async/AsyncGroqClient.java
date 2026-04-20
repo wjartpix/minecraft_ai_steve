@@ -265,4 +265,14 @@ public class AsyncGroqClient implements AsyncLLMClient {
     public boolean isHealthy() {
         return true;
     }
+
+    @Override
+    public String getDefaultModel() {
+        return model;
+    }
+
+    @Override
+    public int getMaxTokens() {
+        return maxTokens;
+    }
 }

@@ -5,20 +5,137 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * Utility class for procedural structure generation.
  * Contains algorithms for generating various building types.
+ * Enhanced with building type variety and humanistic elements.
  */
 public class StructureGenerators {
     
     private static final Random random = new Random();
-
+    
+    // Track used building types for variety
+    private static final Set<EnhancedStructureGenerators.BuildingType> usedBuildingTypes = new HashSet<>();
+    
+    /**
+     * Generate a structure with the specified type and style.
+     * Uses enhanced generators for diverse building types.
+     */
     public static List<BlockPlacement> generate(String structureType, BlockPos start, int width, int height, int depth, BuildingStyle style, List<Block> materials) {
-        // Use creative generators for more variety
-        return CreativeStructureGenerators.generate(structureType, start, width, height, depth, style, materials);
+        // Map generic structure types to enhanced building types
+        EnhancedStructureGenerators.BuildingType buildingType = selectBuildingType(structureType);
+        
+        // Use enhanced generators for diverse buildings
+        return EnhancedStructureGenerators.generate(buildingType, start, width, height, depth, style);
+    }
+    
+    /**
+     * Select a building type based on the requested structure type.
+     * Ensures variety by cycling through different types.
+     */
+    private static EnhancedStructureGenerators.BuildingType selectBuildingType(String structureType) {
+        EnhancedStructureGenerators.BuildingType[] allTypes = EnhancedStructureGenerators.BuildingType.values();
+        
+        // If all types have been used, reset
+        if (usedBuildingTypes.size() >= allTypes.length) {
+            usedBuildingTypes.clear();
+        }
+        
+        // Find unused types
+        List<EnhancedStructureGenerators.BuildingType> availableTypes = new ArrayList<>();
+        for (EnhancedStructureGenerators.BuildingType type : allTypes) {
+            if (!usedBuildingTypes.contains(type)) {
+                availableTypes.add(type);
+            }
+        }
+        
+        // Select based on structure type hint
+        EnhancedStructureGenerators.BuildingType selected;
+        switch (structureType.toLowerCase()) {
+            case "house", "home", "cottage":
+                selected = randomFrom(availableTypes, 
+                    EnhancedStructureGenerators.BuildingType.COZY_COTTAGE,
+                    EnhancedStructureGenerators.BuildingType.FAMILY_HOUSE,
+                    EnhancedStructureGenerators.BuildingType.TOWER_HOUSE);
+                break;
+            case "villa", "mansion", "manor":
+                selected = randomFrom(availableTypes,
+                    EnhancedStructureGenerators.BuildingType.GRAND_VILLA,
+                    EnhancedStructureGenerators.BuildingType.GARDEN_PAVILION);
+                break;
+            case "farm", "barn", "farmhouse":
+                selected = randomFrom(availableTypes,
+                    EnhancedStructureGenerators.BuildingType.FARMHOUSE);
+                break;
+            case "shop", "store", "market":
+                selected = randomFrom(availableTypes,
+                    EnhancedStructureGenerators.BuildingType.MERCHANT_SHOP);
+                break;
+            case "tavern", "inn", "pub":
+                selected = randomFrom(availableTypes,
+                    EnhancedStructureGenerators.BuildingType.TAVERN);
+                break;
+            case "library", "study", "archive":
+                selected = randomFrom(availableTypes,
+                    EnhancedStructureGenerators.BuildingType.LIBRARY);
+                break;
+            case "workshop", "smithy", "factory":
+                selected = randomFrom(availableTypes,
+                    EnhancedStructureGenerators.BuildingType.WORKSHOP);
+                break;
+            default:
+                // Random selection from available types
+                selected = availableTypes.get(random.nextInt(availableTypes.size()));
+                break;
+        }
+        
+        // Track this type as used
+        usedBuildingTypes.add(selected);
+        
+        return selected;
+    }
+    
+    /**
+     * Select a random type from the available list that matches one of the preferred types.
+     * Falls back to any available type if no preferred type is available.
+     */
+    private static EnhancedStructureGenerators.BuildingType randomFrom(
+            List<EnhancedStructureGenerators.BuildingType> available,
+            EnhancedStructureGenerators.BuildingType... preferred) {
+        
+        // Find intersection of available and preferred
+        List<EnhancedStructureGenerators.BuildingType> matches = new ArrayList<>();
+        for (EnhancedStructureGenerators.BuildingType type : preferred) {
+            if (available.contains(type)) {
+                matches.add(type);
+            }
+        }
+        
+        // Return from matches if any, otherwise random from available
+        if (!matches.isEmpty()) {
+            return matches.get(random.nextInt(matches.size()));
+        }
+        return available.get(random.nextInt(available.size()));
+    }
+    
+    /**
+     * Clear the used building types tracking.
+     * Call this to reset variety rotation.
+     */
+    public static void clearUsedBuildingTypes() {
+        usedBuildingTypes.clear();
+    }
+    
+    /**
+     * Get the count of unique building types available.
+     */
+    public static int getAvailableBuildingTypeCount() {
+        return EnhancedStructureGenerators.BuildingType.values().length;
     }
 
     private static Block getMaterial(List<Block> materials, int index) {

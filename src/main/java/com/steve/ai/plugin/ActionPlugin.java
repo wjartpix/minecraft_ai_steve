@@ -4,6 +4,10 @@ import com.steve.ai.di.ServiceContainer;
 
 /**
  * Service Provider Interface (SPI) for action plugins.
+ * 
+ * <p><b>DEPRECATED:</b> This interface has been moved to {@link com.steve.ai.api.plugin.ActionPlugin}.
+ * Please use the new API package for new implementations. This interface is kept for backward
+ * compatibility and will be removed in a future version.</p>
  *
  * <p>Implement this interface to add custom actions to Steve AI.
  * The plugin system uses Java's ServiceLoader mechanism for discovery.</p>
@@ -45,7 +49,8 @@ import com.steve.ai.di.ServiceContainer;
  * @see ActionFactory
  * @see ServiceContainer
  */
-public interface ActionPlugin {
+@Deprecated
+public interface ActionPlugin extends com.steve.ai.api.plugin.ActionPlugin {
 
     /**
      * Returns the unique identifier for this plugin.
@@ -55,6 +60,7 @@ public interface ActionPlugin {
      *
      * @return Unique plugin identifier
      */
+    @Override
     String getPluginId();
 
     /**
@@ -83,6 +89,7 @@ public interface ActionPlugin {
      * @param registry  Action registry to register factories
      * @param container Service container for dependency injection
      */
+    @Override
     void onLoad(ActionRegistry registry, ServiceContainer container);
 
     /**
@@ -91,6 +98,7 @@ public interface ActionPlugin {
      * <p>Perform cleanup operations here (close connections, flush caches, etc.).
      * Default implementation does nothing.</p>
      */
+    @Override
     default void onUnload() {
         // Default: no cleanup needed
     }
@@ -101,16 +109,9 @@ public interface ActionPlugin {
      * <p>Higher priority plugins are loaded first. Used to resolve conflicts
      * when multiple plugins register the same action name.</p>
      *
-     * <p><b>Priority Guidelines:</b></p>
-     * <ul>
-     *   <li>1000+: Core/essential plugins</li>
-     *   <li>500-999: High priority plugins</li>
-     *   <li>0-499: Normal plugins (default)</li>
-     *   <li>Negative: Low priority/override plugins</li>
-     * </ul>
-     *
      * @return Plugin priority (higher = loaded earlier)
      */
+    @Override
     default int getPriority() {
         return 0;
     }
@@ -118,19 +119,9 @@ public interface ActionPlugin {
     /**
      * Returns plugin dependencies that must be loaded before this plugin.
      *
-     * <p>The PluginManager performs topological sorting to ensure dependencies
-     * are loaded in correct order. Circular dependencies will cause load failure.</p>
-     *
-     * <p><b>Example:</b></p>
-     * <pre>
-     * &#64;Override
-     * public String[] getDependencies() {
-     *     return new String[] { "core-actions" };
-     * }
-     * </pre>
-     *
      * @return Array of plugin IDs this plugin depends on
      */
+    @Override
     default String[] getDependencies() {
         return new String[0];
     }
@@ -138,10 +129,9 @@ public interface ActionPlugin {
     /**
      * Returns the plugin version for conflict resolution and logging.
      *
-     * <p>Use semantic versioning (e.g., "1.0.0", "2.1.3").</p>
-     *
      * @return Plugin version string
      */
+    @Override
     default String getVersion() {
         return "1.0.0";
     }
@@ -149,10 +139,9 @@ public interface ActionPlugin {
     /**
      * Returns a human-readable description of this plugin.
      *
-     * <p>Used in logging and debugging output.</p>
-     *
      * @return Plugin description
      */
+    @Override
     default String getDescription() {
         return "No description provided";
     }

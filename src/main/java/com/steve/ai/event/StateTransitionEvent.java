@@ -22,7 +22,7 @@ import java.time.Instant;
  * @since 1.1.0
  * @see AgentState
  */
-public class StateTransitionEvent {
+public class StateTransitionEvent implements DomainEvent {
 
     private final String agentId;
     private final AgentState fromState;

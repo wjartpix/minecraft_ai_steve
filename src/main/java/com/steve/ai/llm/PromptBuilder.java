@@ -23,11 +23,14 @@ public class PromptBuilder {
                 "raid" - pillager, vindicator, evoker, ravager, vex
                 "slime" - slimes and magma_cubes
               Specific mobs: zombie, skeleton, creeper, spider, enderman, witch, phantom, blaze, ghast, slime, magma_cube, etc.
-              When user says "kill mobs" or "clear enemies", use "hostile" as target.
+              When user says "kill mobs" or "clear enemies" or "fight" or "defend", use "hostile" as target.
               When user specifies a type like "skeleton", use that specific name.
               Note: "slime" includes both green slimes and magma cubes.
             - build: {"structure": "house", "blocks": ["oak_planks", "cobblestone", "glass_pane"], "dimensions": [9, 6, 9]}
+              When user says "build" without specifying type, use "house" as default.
+              When user says "build something" or "make a building", use "house".
             - mine: {"block": "iron", "quantity": 8} (resources: iron, diamond, coal, gold, copper, redstone, emerald)
+              When user says "mine" without specifying ore, use "iron" as default.
             - gather: {"resource": "<resource>", "quantity": <n>}
               Resource groups (searches for any block in group, 200x200 area around player):
                 "logs" - any wood log (oak, spruce, birch, jungle, acacia, dark_oak, mangrove, cherry)
@@ -37,13 +40,13 @@ public class PromptBuilder {
                 "stones" - any stone type
                 "all" / "everything" - ALL useful resources (logs, flowers, mushrooms, berries, crops, etc.)
               Specific blocks: oak_log, spruce_log, birch_log, jungle_log, acacia_log, dark_oak_log, mangrove_log, cherry_log, poppy, dandelion, red_mushroom, brown_mushroom, etc.
-              When user says generic "chop trees" or "gather wood", use "logs" as resource.
-              When user says "gather everything" or "collect all" or "harvest resources", use "all" as resource.
+              When user says generic "chop trees" or "gather wood" or "get wood" or "cut wood", use "logs" as resource with quantity 64.
+              When user says "gather everything" or "collect all" or "collect everything" or "harvest resources" or "get stuff", use "all" as resource with quantity 64.
               When user specifies a type like "birch", use the specific block "birch_log".
-              When user says "gather all" or "collect everything", use "all" with quantity 64 as default.
               Simplified commands: "get wood", "get flowers", "get mushrooms", "collect everything" should use appropriate group with quantity 64.
             - craft: {"item": "oak_planks", "quantity": 4} (crafting items)
             - follow: {"player": "NAME"}
+              When user says "follow" or "come" or "come here", use "nearest" as player.
             - pathfind: {"x": 0, "y": 0, "z": 0}
             - create: {"vehicle": "TYPE"} (create vehicles and equipment)
               Vehicle types:
@@ -64,11 +67,29 @@ public class PromptBuilder {
             7. Keep reasoning under 15 words
             8. COLLABORATIVE BUILDING: Multiple Steves can work on same structure simultaneously
             9. MINING: Can mine any ore (iron, diamond, coal, etc)
+            10. ULTRA-SIMPLE COMMANDS: When user gives very short commands like "build", "fight", "collect", "follow", interpret them generously:
+                - "build" -> build a house
+                - "fight" / "kill" -> attack hostile mobs
+                - "collect" / "gather" -> gather all resources
+                - "follow" -> follow player
+                - "mine" / "dig" -> mine iron ore
             
             EXAMPLES (copy these formats exactly):
             
+            Input: "build"
+            {"reasoning": "Building house for player", "plan": "Construct house", "tasks": [{"action": "build", "parameters": {"structure": "house", "blocks": ["oak_planks", "cobblestone", "glass_pane"], "dimensions": [9, 6, 9]}}]}
+            
             Input: "build a house"
             {"reasoning": "Building standard house near player", "plan": "Construct house", "tasks": [{"action": "build", "parameters": {"structure": "house", "blocks": ["oak_planks", "cobblestone", "glass_pane"], "dimensions": [9, 6, 9]}}]}
+            
+            Input: "fight"
+            {"reasoning": "Attacking hostile mobs", "plan": "Clear enemies", "tasks": [{"action": "attack", "parameters": {"target": "hostile"}}]}
+            
+            Input: "collect everything"
+            {"reasoning": "Gathering all resources", "plan": "Collect everything", "tasks": [{"action": "gather", "parameters": {"resource": "all", "quantity": 64}}]}
+            
+            Input: "get wood"
+            {"reasoning": "Chopping trees for wood", "plan": "Gather wood logs", "tasks": [{"action": "gather", "parameters": {"resource": "logs", "quantity": 64}}]}
             
             Input: "get me iron"
             {"reasoning": "Mining iron ore for player", "plan": "Mine iron", "tasks": [{"action": "mine", "parameters": {"block": "iron", "quantity": 16}}]}
@@ -84,6 +105,9 @@ public class PromptBuilder {
             
             Input: "follow me"
             {"reasoning": "Player needs me", "plan": "Follow player", "tasks": [{"action": "follow", "parameters": {"player": "USE_NEARBY_PLAYER_NAME"}}]}
+            
+            Input: "follow"
+            {"reasoning": "Following player", "plan": "Follow player", "tasks": [{"action": "follow", "parameters": {"player": "nearest"}}]}
             
             Input: "collect woods"
             {"reasoning": "Player wants wood logs from trees", "plan": "Gather wood logs from nearby trees", "tasks": [{"action": "gather", "parameters": {"resource": "oak_log", "quantity": 16}}]}

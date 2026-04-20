@@ -7,8 +7,11 @@ import com.steve.ai.di.ServiceContainer;
 import com.steve.ai.di.SimpleServiceContainer;
 import com.steve.ai.entity.SteveEntity;
 import com.steve.ai.entity.SteveManager;
-import com.steve.ai.plugin.ActionRegistry;
-import com.steve.ai.plugin.PluginManager;
+import com.steve.ai.module.ActionModule;
+import com.steve.ai.module.BuildingModule;
+import com.steve.ai.module.CoreModule;
+import com.steve.ai.module.LLMModule;
+import com.steve.ai.module.ModuleManager;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.common.MinecraftForge;
@@ -21,6 +24,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
@@ -40,7 +44,8 @@ public class SteveMod {
             .clientTrackingRange(10)
             .build("steve"));
 
-    private static SteveManager steveManager;
+    private static ModuleManager moduleManager;
+    private static ServiceContainer serviceContainer;
 
     public SteveMod() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -55,17 +60,38 @@ public class SteveMod {
         MinecraftForge.EVENT_BUS.register(this);
         
         if (net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
-            MinecraftForge.EVENT_BUS.register(com.steve.ai.client.SteveGUI.class);        }
+            MinecraftForge.EVENT_BUS.register(com.steve.ai.client.SteveGUI.class);
+        }
         
-        steveManager = new SteveManager();
+        // Initialize service container
+        serviceContainer = new SimpleServiceContainer();
+        
+        // Initialize module manager
+        moduleManager = new ModuleManager(serviceContainer);
+        
+        // Register core modules
+        moduleManager.register(new CoreModule());
+        moduleManager.register(new LLMModule());
+        moduleManager.register(new ActionModule());
+        moduleManager.register(new BuildingModule());
+        
+        LOGGER.info("SteveMod initialized with modular architecture");
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        // Initialize plugin system
-        ActionRegistry registry = ActionRegistry.getInstance();
-        ServiceContainer container = new SimpleServiceContainer();
-        PluginManager.getInstance().loadPlugins(registry, container);
-        LOGGER.info("Plugin system initialized");
+        // Initialize and start all modules
+        moduleManager.initAll();
+        moduleManager.startAll();
+        LOGGER.info("All modules initialized and started");
+    }
+    
+    @SubscribeEvent
+    public void onServerStopping(ServerStoppingEvent event) {
+        // Stop all modules gracefully
+        if (moduleManager != null) {
+            moduleManager.stopAll();
+            LOGGER.info("All modules stopped");
+        }
     }
 
     private void entityAttributes(EntityAttributeCreationEvent event) {
@@ -73,10 +99,38 @@ public class SteveMod {
     }
 
     @SubscribeEvent
-    public void onCommandRegister(RegisterCommandsEvent event) {        SteveCommands.register(event.getDispatcher());    }
+    public void onCommandRegister(RegisterCommandsEvent event) {
+        SteveCommands.register(event.getDispatcher());
+    }
 
+    /**
+     * Gets the Steve manager from the core module.
+     *
+     * @return The Steve manager, or null if not available
+     */
     public static SteveManager getSteveManager() {
-        return steveManager;
+        if (moduleManager == null) return null;
+        CoreModule coreModule = (CoreModule) moduleManager.getModule("core");
+        if (coreModule == null) return null;
+        return coreModule.getSteveManager();
+    }
+    
+    /**
+     * Gets the module manager.
+     *
+     * @return The module manager
+     */
+    public static ModuleManager getModuleManager() {
+        return moduleManager;
+    }
+    
+    /**
+     * Gets the service container.
+     *
+     * @return The service container
+     */
+    public static ServiceContainer getServiceContainer() {
+        return serviceContainer;
     }
 }
 
