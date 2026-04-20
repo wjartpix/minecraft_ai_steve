@@ -13,14 +13,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Plans tasks for Steve using async LLM clients with resilience patterns.
+ *
+ * <p>Supports multiple LLM providers (OpenAI, Groq, Gemini, Qwen) with
+ * automatic fallback, circuit breaking, retry, and caching.</p>
+ */
 public class TaskPlanner {
-    // Legacy synchronous clients (for backward compatibility)
-    private final OpenAIClient openAIClient;
-    private final GeminiClient geminiClient;
-    private final GroqClient groqClient;
-    private final QwenClient qwenClient;
 
-    // NEW: Async resilient clients
     private final AsyncLLMClient asyncOpenAIClient;
     private final AsyncLLMClient asyncGroqClient;
     private final AsyncLLMClient asyncGeminiClient;
@@ -29,12 +29,6 @@ public class TaskPlanner {
     private final LLMFallbackHandler fallbackHandler;
 
     public TaskPlanner() {
-        // Legacy clients - only initialize if API key is configured
-        this.openAIClient = createLegacyClientSafely("OpenAI", () -> new OpenAIClient());
-        this.geminiClient = createLegacyClientSafely("Gemini", () -> new GeminiClient());
-        this.groqClient = createLegacyClientSafely("Groq", () -> new GroqClient());
-        this.qwenClient = createLegacyClientSafely("Qwen", () -> new QwenClient());
-
         // Initialize async infrastructure
         this.llmCache = new LLMCache();
         this.fallbackHandler = new LLMFallbackHandler();
@@ -82,15 +76,6 @@ public class TaskPlanner {
         T create() throws Exception;
     }
 
-    private <T> T createLegacyClientSafely(String name, ClientFactory<T> factory) {
-        try {
-            return factory.create();
-        } catch (Exception e) {
-            SteveMod.LOGGER.warn("Failed to initialize {} legacy client: {}", name, e.getMessage());
-            return null;
-        }
-    }
-
     private AsyncLLMClient createAsyncClientSafely(String name, ClientFactory<AsyncLLMClient> factory) {
         try {
             return factory.create();
@@ -98,57 +83,6 @@ public class TaskPlanner {
             SteveMod.LOGGER.warn("Failed to initialize {} async client: {}", name, e.getMessage());
             return null;
         }
-    }
-
-    public ResponseParser.ParsedResponse planTasks(SteveEntity steve, String command) {
-        try {
-            String systemPrompt = PromptBuilder.buildSystemPrompt();
-            WorldKnowledge worldKnowledge = new WorldKnowledge(steve);
-            String userPrompt = PromptBuilder.buildUserPrompt(steve, command, worldKnowledge);
-            
-            String provider = SteveConfig.AI_PROVIDER.get().toLowerCase();
-            SteveMod.LOGGER.info("Requesting AI plan for Steve '{}' using {}: {}", steve.getSteveName(), provider, command);
-            
-            String response = getAIResponse(provider, systemPrompt, userPrompt);
-            
-            if (response == null) {
-                SteveMod.LOGGER.error("Failed to get AI response for command: {}", command);
-                return null;
-            }            ResponseParser.ParsedResponse parsedResponse = ResponseParser.parseAIResponse(response);
-            
-            if (parsedResponse == null) {
-                SteveMod.LOGGER.error("Failed to parse AI response");
-                return null;
-            }
-            
-            SteveMod.LOGGER.info("Plan: {} ({} tasks)", parsedResponse.getPlan(), parsedResponse.getTasks().size());
-            
-            return parsedResponse;
-            
-        } catch (Exception e) {
-            SteveMod.LOGGER.error("Error planning tasks", e);
-            return null;
-        }
-    }
-
-    private String getAIResponse(String provider, String systemPrompt, String userPrompt) {
-        String response = switch (provider) {
-            case "groq" -> groqClient.sendRequest(systemPrompt, userPrompt);
-            case "gemini" -> geminiClient.sendRequest(systemPrompt, userPrompt);
-            case "openai" -> openAIClient.sendRequest(systemPrompt, userPrompt);
-            case "qwen" -> qwenClient.sendRequest(systemPrompt, userPrompt);
-            default -> {
-                SteveMod.LOGGER.warn("Unknown AI provider '{}', using Groq", provider);
-                yield groqClient.sendRequest(systemPrompt, userPrompt);
-            }
-        };
-
-        if (response == null && !provider.equals("groq")) {
-            SteveMod.LOGGER.warn("{} failed, trying Groq as fallback", provider);
-            response = groqClient.sendRequest(systemPrompt, userPrompt);
-        }
-
-        return response;
     }
 
     /**

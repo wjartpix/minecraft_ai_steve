@@ -157,55 +157,6 @@ public class ActionExecutor {
     }
 
     /**
-     * Legacy synchronous command processing (blocking).
-     *
-     * <p><b>Warning:</b> This method blocks the game thread for 30-60 seconds during LLM calls.
-     * Use {@link #processNaturalLanguageCommand(String)} instead for non-blocking execution.</p>
-     *
-     * @param command The natural language command
-     * @deprecated Use {@link #processNaturalLanguageCommand(String)} instead
-     */
-    @Deprecated
-    public void processNaturalLanguageCommandSync(String command) {
-        SteveMod.LOGGER.info("Steve '{}' processing command (SYNC - blocking!): {}", steve.getSteveName(), command);
-
-        if (currentAction != null) {
-            currentAction.cancel();
-            currentAction = null;
-        }
-
-        if (idleFollowAction != null) {
-            idleFollowAction.cancel();
-            idleFollowAction = null;
-        }
-
-        try {
-            // BLOCKING CALL - freezes game for 30-60 seconds!
-            ResponseParser.ParsedResponse response = getTaskPlanner().planTasks(steve, command);
-
-            if (response == null) {
-                sendToGUI(steve.getSteveName(), "I couldn't understand that command.");
-                return;
-            }
-
-            currentGoal = response.getPlan();
-            steve.getMemory().setCurrentGoal(currentGoal);
-
-            taskQueue.clear();
-            taskQueue.addAll(response.getTasks());
-
-            if (SteveConfig.ENABLE_CHAT_RESPONSES.get()) {
-                sendToGUI(steve.getSteveName(), "Okay! " + currentGoal);
-            }
-        } catch (NoClassDefFoundError e) {
-            SteveMod.LOGGER.error("Failed to initialize AI components", e);
-            sendToGUI(steve.getSteveName(), "Sorry, I'm having trouble with my AI systems!");
-        }
-
-        SteveMod.LOGGER.info("Steve '{}' queued {} tasks", steve.getSteveName(), taskQueue.size());
-    }
-    
-    /**
      * Send a message to the GUI pane (client-side only, no chat spam)
      */
     private void sendToGUI(String steveName, String message) {
